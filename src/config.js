@@ -52,6 +52,7 @@ function get() {
     processedExt: nconf.get('processedExt'),
     logger: nconf.get('logger'),
     parallelImports: nconf.get('parallelImports'),
+    workingDir: nconf.get('workingDir'),
   };
 
   return config;
@@ -72,6 +73,7 @@ function get() {
 function validate(config, callback) {
   const schema = Joi.object().keys({
     sourceDir: Joi.string(),
+    workingDir: Joi.string(),
     processedExt: Joi.string(),
     parallelImports: Joi.number().integer().min(1),
     connectionAttempts: Joi.number().integer().min(1),

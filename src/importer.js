@@ -280,6 +280,7 @@ function run(options) {
     processedExt,
     target,
     parallelImports,
+    workingDir,
   } = options;
 
   const db = dbPostgres; 
@@ -298,7 +299,6 @@ function run(options) {
   // be processed one at a time.
   const queue = async.queue((filepath, cb) => {
     logger.verbose('File Queued', filepath);
-    const workingDir = path.join(__dirname, '../working/');
     processFile(db, filepath, workingDir, parallelImports, processedExt, cb);
   }, 1);
 
