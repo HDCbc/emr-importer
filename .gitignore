@@ -1,0 +1,6 @@
+.env
+logs
+build
+uploads
+node_modules
+working
