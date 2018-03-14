@@ -135,14 +135,14 @@ function processFile(db, filepath, workingDir, parallelImports, processedExt, ca
 
   return async.auto({
     // Clear working directory.
-    clearWorking: (cb) => { 
+    clearWorking: (cb) => {
 winston.info('STart clear working');
       rimraf(workingDir + '/*', { glob: false }, (err, res) => {
         if (err) {
           winston.error('Unabel to clear working', { err });
           return cb(err);
         }
-winston.info('Cleared Working');    
+winston.info('Cleared Working');
     return cb(null);
       });
     },
@@ -185,10 +185,31 @@ winston.info('Cleared Working');
     syncEntry: ['syncPatientPractitioner', (res, cb) => {
       runScriptFile(db, 'Synchronize Entry', '../sql/syncEntry.sql', cb);
     }],
-    syncEntryAttribute: ['syncEntry', (res, cb) => {
+    syncEntryAttributePreUnlogged: ['syncEntry', (res, cb) => {
+      runScriptFile(db, 'Synchronize Entry Attribute (Pre Unlogged)', '../sql/syncEntryAttributePreUnlogged.sql', cb);
+    }],
+    syncEntryAttributePreConstraints: ['syncEntryAttributePreUnlogged', (res, cb) => {
+      runScriptFile(db, 'Synchronize Entry Attribute (Pre Constraints)', '../sql/syncEntryAttributePreConstraints.sql', cb);
+    }],
+    syncEntryAttributePreIndices: ['syncEntryAttributePreConstraints', (res, cb) => {
+      runScriptFile(db, 'Synchronize Entry Attribute (Pre Indices)', '../sql/syncEntryAttributePreIndices.sql', cb);
+    }],
+    syncEntryAttribute: ['syncEntryAttributePreIndices', (res, cb) => {
       runScriptFile(db, 'Synchronize Entry Attribute', '../sql/syncEntryAttribute.sql', cb);
     }],
-    syncEntryState: ['syncEntryAttribute', (res, cb) => {
+    syncEntryAttributePostLogged: ['syncEntryAttribute', (res, cb) => {
+      runScriptFile(db, 'Synchronize Entry Attribute (Post Logged)', '../sql/syncEntryAttributePostLogged.sql', cb);
+    }],
+    syncEntryAttributePostConstraints: ['syncEntryAttributePostLogged', (res, cb) => {
+      runScriptFile(db, 'Synchronize Entry Attribute (Post Constraints)', '../sql/syncEntryAttributePostConstraints.sql', cb);
+    }],
+    syncEntryAttributePostIndices: ['syncEntryAttributePostConstraints', (res, cb) => {
+      runScriptFile(db, 'Synchronize Entry Attribute (Post Indices)', '../sql/syncEntryAttributePostIndices.sql', cb);
+    }],
+    syncEntryAttributePostAnalyze: ['syncEntryAttributePostIndices', (res, cb) => {
+      runScriptFile(db, 'Synchronize Entry Attribute (Post Analyze)', '../sql/syncEntryAttributePostAnalyze.sql', cb);
+    }],
+    syncEntryState: ['syncEntryAttributePostAnalyze', (res, cb) => {
       runScriptFile(db, 'Synchronize Entry State', '../sql/syncEntryState.sql', cb);
     }],
     dropEtl: ['syncEntryState', (res, cb) => {
@@ -283,7 +304,7 @@ function run(options) {
     workingDir,
   } = options;
 
-  const db = dbPostgres; 
+  const db = dbPostgres;
   db.init(target);
   console.log('db', db);
   // Mask the password before logging.
