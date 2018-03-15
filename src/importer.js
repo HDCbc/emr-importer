@@ -136,14 +136,15 @@ function processFile(db, filepath, workingDir, parallelImports, processedExt, ca
   return async.auto({
     // Clear working directory.
     clearWorking: (cb) => {
-winston.info('STart clear working');
-      rimraf(workingDir + '/*', { glob: false }, (err, res) => {
+      const pattern = `${workingDir}/*`;
+      winston.info('Start clear working', { pattern });
+      rimraf(pattern, { }, (err) => {
         if (err) {
           winston.error('Unabel to clear working', { err });
           return cb(err);
         }
-winston.info('Cleared Working');
-    return cb(null);
+        winston.info('Cleared Working');
+        return cb(null);
       });
     },
     // Initialize the etl tables to import data into.
@@ -225,7 +226,7 @@ winston.info('Cleared Working');
     // Rename the imported file to indicate that it was processed successfully.
     renameFile: ['removeTemp', (res, cb) => {
       const processedPath = path.join(path.dirname(filepath), `${path.basename(filepath)}.${processedExt}`);
-winston.info('Renaming file', { filepath, processedPath });
+      winston.info('Renaming file', { filepath, processedPath });
       fs.rename(filepath, processedPath, cb);
     }],
   }, (err) => {
