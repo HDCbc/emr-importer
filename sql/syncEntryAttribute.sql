@@ -3,4 +3,5 @@ INSERT INTO universal.entry_attribute (entry_id, attribute_id, code_system, code
        FROM etl.entry_attribute as ea
        JOIN universal.entry as ue
          ON ue.emr_id = ea.emr_entry_id
-        AND ue.emr_table = ea.source_table;
+        AND ue.emr_table = ea.source_table
+        AND ue.entry_type_id = floor(ea.attribute_id);

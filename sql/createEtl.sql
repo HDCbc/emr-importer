@@ -22,5 +22,5 @@ ALTER TABLE etl.entry_attribute SET (autovacuum_enabled = false, toast.autovacuu
 CREATE UNLOGGED TABLE IF NOT EXISTS etl.entry_state (source_table text, emr_entry_id text, state text, effective_date timestamp with time zone, emr_reference text);
 ALTER TABLE etl.entry_state SET (autovacuum_enabled = false, toast.autovacuum_enabled = false);
 
-CREATE UNLOGGED TABLE IF NOT EXISTS etl.entry (source_table text, emr_id text, emr_patient_id text);
+CREATE UNLOGGED TABLE IF NOT EXISTS etl.entry (source_table text, entry_type_id int, emr_id text, emr_patient_id text);
 ALTER TABLE etl.entry SET (autovacuum_enabled = false, toast.autovacuum_enabled = false);
