@@ -64,11 +64,13 @@ const populateTasks = (dataDir, db, callback) => {
       } else if (filename.startsWith('Entry')) { // Must be after entry-attribute and state
         table = 'etl.entry';
       } else {
-        throw new Error(`Unrecognized filename format (${filename})`);
+        winston.warn('Skipping File', { filename });
       }
 
-      tasks.push(async.apply(importTask, db, table, filepath));
-      winston.verbose('Task Created', { table, filepath });
+      if (table) {
+        tasks.push(async.apply(importTask, db, table, filepath));
+        winston.verbose('Task Created', { table, filepath });
+      }
     });
 
     winston.info(`  Populating Tasks Completed (${Object.keys(tasks).length} tasks from ${files.length} files)`);
