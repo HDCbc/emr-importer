@@ -1,7 +1,7 @@
 DROP SCHEMA IF EXISTS etl CASCADE;
 CREATE SCHEMA etl;
 
-CREATE UNLOGGED TABLE IF NOT EXISTS etl.clinic (name text, hdc_reference text, emr_clinic_id text, emr_reference text);
+CREATE UNLOGGED TABLE IF NOT EXISTS etl.clinic (name text, hdc_reference text, emr_clinic_id text, emr_reference text, emr text);
 ALTER TABLE etl.clinic SET (autovacuum_enabled = false, toast.autovacuum_enabled = false);
 
 CREATE UNLOGGED TABLE IF NOT EXISTS etl.practitioner (emr_clinic_id text, name text, identifier text, identifier_type text, emr_practitioner_id text, emr_reference text);
