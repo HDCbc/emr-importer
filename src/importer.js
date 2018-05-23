@@ -142,7 +142,7 @@ function processFile(db, filepath, workingDir, parallelImports, processedExt, ca
       winston.info('Start clear working', { pattern });
       rimraf(pattern, { }, (err) => {
         if (err) {
-          winston.error('Unabel to clear working', { err });
+          winston.error('Unable to clear working', { err });
           return cb(err);
         }
         winston.info('Cleared Working');

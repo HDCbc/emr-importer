@@ -1,6 +1,6 @@
 .env
-logs
 build
-uploads
+logs
 node_modules
+uploads
 working
