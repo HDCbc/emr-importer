@@ -264,30 +264,6 @@ function processFile(db, filepath, workingDir, parallelImports, processedExt, ca
   });
 }
 
-function waitForConnection(db, callback) {
-  winston.info('Wait for Connection Started');
-  const start = Date.now();
-
-  const testConnection = cb => db.query({ q: 'select 1' }, cb);
-
-  async.retry({
-    times: 60,
-    internal: 1000,
-    errorFilter(err) {
-      winston.info(`  ${err}`);
-      return true;
-    },
-  }, testConnection, (err) => {
-    if (err) {
-      return callback(err);
-    }
-
-    const elapsedSec = (Date.now() - start) / 1000;
-    winston.info(`Wait for Connection Completed (${elapsedSec} sec)`);
-    return callback(null);
-  });
-}
-
 function startWatching(watchDir, ignoreExt, queue) {
   logger.info('Watching Started', { watchDir, ignoreExt });
 
