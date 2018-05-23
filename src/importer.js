@@ -131,6 +131,38 @@ function runScriptFile(db, taskName, relativePath, callback) {
   });
 }
 
+function deleteFolder(filepath, callback) {
+  winston.info('Delete Folder Started', { filepath });
+  const start = Date.now();
+
+  rimraf(filepath, {}, (err) => {
+    if (err) {
+      winston.error(`Delete folder (${filepath}) Failed`, { err });
+      return callback(err);
+    }
+
+    const elapsedSec = (Date.now() - start) / 1000;
+    winston.info(`Delete Folder Completed  (${elapsedSec} sec)`);
+    return callback(null);
+  });
+}
+
+function renameFile(fromPath, toPath, callback) {
+  winston.info('Rename File Started', { fromPath, toPath });
+  const start = Date.now();
+
+  fs.rename(fromPath, toPath, (err) => {
+    if (err) {
+      winston.error(`Rename File (${fromPath}) Failed`, { err });
+      return callback(err);
+    }
+
+    const elapsedSec = (Date.now() - start) / 1000;
+    winston.info(`Rename File Completed  (${elapsedSec} sec)`);
+    return callback(null);
+  });
+}
+
 function processFile(db, filepath, workingDir, parallelImports, processedExt, callback) {
   winston.info('Import Started', { filepath, workingDir });
   const start = Date.now();
@@ -138,16 +170,7 @@ function processFile(db, filepath, workingDir, parallelImports, processedExt, ca
   return async.auto({
     // Clear working directory.
     clearWorking: (cb) => {
-      const pattern = `${workingDir}/*`;
-      winston.info('Start clear working', { pattern });
-      rimraf(pattern, { }, (err) => {
-        if (err) {
-          winston.error('Unable to clear working', { err });
-          return cb(err);
-        }
-        winston.info('Cleared Working');
-        return cb(null);
-      });
+      deleteFolder(`${workingDir}/*`, cb);
     },
     // Initialize the etl tables to import data into.
     etlSchema: ['clearWorking', (res, cb) => {
@@ -228,8 +251,7 @@ function processFile(db, filepath, workingDir, parallelImports, processedExt, ca
     // Rename the imported file to indicate that it was processed successfully.
     renameFile: ['removeTemp', (res, cb) => {
       const processedPath = path.join(path.dirname(filepath), `${path.basename(filepath)}.${processedExt}`);
-      winston.info('Renaming file', { filepath, processedPath });
-      fs.rename(filepath, processedPath, cb);
+      renameFile(filepath, processedPath, cb);
     }],
   }, (err) => {
     if (err) {
