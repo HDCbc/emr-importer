@@ -22,37 +22,6 @@ module.exports = (() => {
     pool = new pg.Pool(config);
   };
 
-  /**
-   * Export the data from a SQL query to a file on the local machine.
-   *
-   * @param selectQuery - The SQL query to run.
-   * @param exportPath - The filepath to export the file to.
-   * @param callback - A callback to be called when the function is complete.
-   * @param callback.err - If failure, the error.
-   * @param callback.res.rows - If success, the number of rows that were exported.
-   */
-  const exportData = (selectQuery, exportPath, callback) => {
-    const escapedExportPath = exportPath.split('\\').join('\\\\');
-
-    const exportQuery = `
-      COPY (${selectQuery})
-      TO '${escapedExportPath}'
-      FORCE QUOTE *
-      DELIMITER ','
-      CSV NULL AS '\\N'
-      ENCODING 'LATIN1' ESCAPE '\\';
-    `;
-
-    winston.debug('Postgres Export', exportQuery);
-
-    pool.query(exportQuery, (err, res) => {
-      if (err) {
-        return callback(err);
-      }
-      return callback(err, { rows: res.rowCount });
-    });
-  };
-
   const query = ({ q, p = [] }, callback) => {
     winston.debug('Postgres Query', q);
     pool.query(q, p, (err, res) => {
@@ -62,6 +31,7 @@ module.exports = (() => {
       return callback(null, res);
     });
   };
+
   const query2 = (q, callback) => {
     winston.debug('Postgres Query', q);
     pool.query(q, (err, res) => {
@@ -81,7 +51,6 @@ module.exports = (() => {
       query2,
     ], callback);
   };
-
 
   const importFile = (table, filepath, callback) => {
     winston.debug('db_postgres.importFile', { table, filepath });
@@ -107,15 +76,10 @@ module.exports = (() => {
       stream.on('end', allDone);
       fileStream.pipe(stream);
     });
-
-    // pool.query(statement, (err, res) => {
-    //   callback(err, res);
-    // });
   };
 
   return {
     init,
-    exportData,
     query,
     runScriptFile,
     importFile,
