@@ -1,5 +1,5 @@
-INSERT INTO universal.state (record_type, record_id, state, effective_date, emr_reference, emr_id)
-     SELECT 'entry', ue.id, ees.state, ees.effective_date, ees.emr_reference, ees.emr_id
+INSERT INTO universal.state (record_type, record_id, state, effective_date, emr_reference)
+     SELECT 'entry', ue.id, ees.state, ees.effective_date, ees.emr_reference
        FROM etl.entry_state as ees
        JOIN universal.entry as ue
          ON ue.emr_id = ees.emr_entry_id
