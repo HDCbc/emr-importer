@@ -47,7 +47,8 @@ module.exports = (() => {
     async.waterfall([
       async.constant(path), // , 'utf8'),
       fs.readFile,
-      function (huh, cb) { cb(null, huh.toString()); },
+      // Convert file content to string
+      (content, cb) => { cb(null, content.toString()); },
       query2,
     ], callback);
   };
@@ -63,18 +64,20 @@ module.exports = (() => {
       if (err) {
         return callback(err);
       }
+      const cf = copyFrom(statement);
 
-      function allDone(a, b) {
+      function allDone(streamErr) {
+        // Close the connection to the database
         done();
-        callback(a, b);
+        callback(streamErr, cf.rowCount);
       }
 
-      const stream = client.query(copyFrom(statement));
+      const stream = client.query(cf);
       const fileStream = fs.createReadStream(filepath);
       fileStream.on('error', allDone);
       stream.on('error', allDone);
       stream.on('end', allDone);
-      fileStream.pipe(stream);
+      return fileStream.pipe(stream);
     });
   };
 

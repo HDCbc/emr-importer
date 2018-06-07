@@ -13,29 +13,22 @@ const winston = require('winston');
 const dbPostgres = require('./dbPostgres');
 
 const uploadData = (db, table, filepath, callback) => {
-  db.importFile(table, filepath, (err, res) => callback(err, res));
-};
-
-const importTask = (db, table, filepath, callback) => {
   const start = Date.now();
 
-  async.series({
-    uploadData: async.apply(uploadData, db, table, filepath),
-  }, (err, res) => {
+  db.importFile(table, filepath, (err, rowCount) => {
     const elapsedSec = (Date.now() - start) / 1000;
     if (err) {
-      winston.error(`THERE IS AN ERROR FOR THE TASK ${table} ${filepath}`, err);
+      winston.error(`Task Error (${table} ${filepath})`, err);
       return callback(err);
     }
 
-    // TODO - display row counts
-    winston.verbose(`    CSV Uploaded ${path.basename(filepath)} (Some ### in ${elapsedSec} sec)`);
-    return callback(err, res);
+    winston.verbose(` CSV Uploaded ${path.basename(filepath)} (${rowCount} rows in ${elapsedSec} sec)`);
+    return callback(err, { rowCount, elapsedSec });
   });
 };
 
 const populateTasks = (dataDir, db, callback) => {
-  winston.info('  Populating Tasks Started');
+  winston.info('Populating Tasks Started');
 
   const tasks = [];
 
@@ -68,18 +61,18 @@ const populateTasks = (dataDir, db, callback) => {
       }
 
       if (table) {
-        tasks.push(async.apply(importTask, db, table, filepath));
-        winston.verbose('Task Created', { table, filepath });
+        tasks.push(async.apply(uploadData, db, table, filepath));
+        winston.verbose(' Task Created', { table, filepath });
       }
     });
 
-    winston.info(`  Populating Tasks Completed (${Object.keys(tasks).length} tasks from ${files.length} files)`);
+    winston.info(`Populating Tasks Completed (${Object.keys(tasks).length} tasks from ${files.length} files)`);
     return callback(null, tasks);
   });
 };
 
 function runTasks(tasks, parallelLimit, callback) {
-  winston.info('Upload Started', { parallelLimit, tasks: tasks.length });
+  winston.info('Uploading Started', { parallelLimit, tasks: tasks.length });
   const start = Date.now();
 
   async.parallelLimit(tasks, parallelLimit, (err, res) => {
@@ -89,9 +82,11 @@ function runTasks(tasks, parallelLimit, callback) {
       return callback(err);
     }
 
-    // const rows = _.sumBy(_.toArray(res), t => (t.rows ? t.rows : 0));
+    const rowCount = _.sumBy(_.toArray(res), t => (t.rowCount ? t.rowCount : 0));
+    const serialElapsedSec = _.sumBy(_.toArray(res), t => (t.elapsedSec ? t.elapsedSec : 0));
+    const serialTruncated = (Math.floor(serialElapsedSec) * 1000) / 1000;
 
-    winston.info(`  Upload Completed (${-42} rows in ${elapsedSec} sec)`);
+    winston.info(`Uploading Completed (${rowCount} rows in ${elapsedSec} sec, serial ${serialTruncated} sec)`);
     return callback(err, res);
   });
 }
@@ -104,7 +99,7 @@ function uncompress(sourceFile, targetDir, callback) {
   decompress(sourceFile, targetDir)
     .then((files) => {
       const elapsedSec = (Date.now() - start) / 1000;
-      winston.info(`  Decompress Completed (${elapsedSec} sec)`);
+      winston.info(`Decompress Completed (${elapsedSec} sec)`);
       return callback(null, files);
     })
     .catch((err) => {
@@ -120,13 +115,12 @@ function runScriptFile(db, taskName, relativePath, callback) {
 
   db.runScriptFile(scriptPath, (err, res) => {
     if (err) {
-      console.log('ERROR', err);
       winston.error(`Script ${taskName} Failed`, { err });
       return callback(err);
     }
 
     const elapsedSec = (Date.now() - start) / 1000;
-    winston.info(`${taskName} Completed (${elapsedSec} sec)`);
+    winston.info(`Script ${taskName} Completed (${elapsedSec} sec)`);
     return callback(err, res);
   });
 }
@@ -241,7 +235,10 @@ function processFile(db, filepath, workingDir, parallelImports, processedExt, ca
     dropEtl: ['syncEntryState', (res, cb) => {
       runScriptFile(db, 'Drop ETL', '../sql/dropEtl.sql', cb);
     }],
-    vacuum: ['dropEtl', (res, cb) => {
+    logImport: ['dropEtl', (res, cb) => {
+      runScriptFile(db, 'Log Import', '../sql/logImport.sql', cb);
+    }],
+    vacuum: ['logImport', (res, cb) => {
       runScriptFile(db, 'Vacuum', '../sql/vacuum.sql', cb);
     }],
     // Clear the working directory with the uncompressed files.
@@ -255,7 +252,7 @@ function processFile(db, filepath, workingDir, parallelImports, processedExt, ca
     }],
   }, (err) => {
     if (err) {
-      console.log('Error', err);
+      winston.error('Import Error', { err });
       return callback(err);
     }
     const elapsedSec = (Date.now() - start) / 1000;
@@ -270,9 +267,7 @@ function startWatching(watchDir, ignoreExt, queue) {
   // Full list of options. See below for descriptions. (do not use this example)
   const watcher = chokidar.watch(watchDir, {
     persistent: true,
-    ignored: (filepath) => {
-      return path.extname(filepath) === `.${ignoreExt}`;
-    },
+    ignored: filepath => path.extname(filepath) === `.${ignoreExt}`,
     ignoreInitial: false,
     alwaysStat: true,
     awaitWriteFinish: {
@@ -292,7 +287,6 @@ function startWatching(watchDir, ignoreExt, queue) {
  *
  */
 function run(options) {
-  const start = Date.now();
   logger.info(_.repeat('=', 160));
   logger.info('Run Started');
 
@@ -307,7 +301,7 @@ function run(options) {
 
   const db = dbPostgres;
   db.init(target);
-  console.log('db', db);
+
   // Mask the password before logging.
   const logOptions = Object.assign({}, options, {
     target: Object.assign({}, options.target, { password: 'XXX' }),
@@ -320,7 +314,7 @@ function run(options) {
   // Create a queue object with concurrency of 1. When files are added to the queue they will
   // be processed one at a time.
   const queue = async.queue((filepath, cb) => {
-    logger.verbose('File Queued', filepath);
+    logger.verbose('File Queued', { filepath });
     processFile(db, filepath, workingDir, parallelImports, processedExt, cb);
   }, 1);
 
