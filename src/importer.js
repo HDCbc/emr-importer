@@ -13,29 +13,22 @@ const winston = require('winston');
 const dbPostgres = require('./dbPostgres');
 
 const uploadData = (db, table, filepath, callback) => {
-  db.importFile(table, filepath, (err, res) => callback(err, res));
-};
-
-const importTask = (db, table, filepath, callback) => {
   const start = Date.now();
 
-  async.series({
-    uploadData: async.apply(uploadData, db, table, filepath),
-  }, (err, res) => {
+  db.importFile(table, filepath, (err, rowCount) => {
     const elapsedSec = (Date.now() - start) / 1000;
     if (err) {
-      winston.error(`THERE IS AN ERROR FOR THE TASK ${table} ${filepath}`, err);
+      winston.error(`Task Error (${table} ${filepath})`, err);
       return callback(err);
     }
 
-    // TODO - display row counts
-    winston.verbose(`    CSV Uploaded ${path.basename(filepath)} (Some ### in ${elapsedSec} sec)`);
-    return callback(err, res);
+    winston.verbose(` CSV Uploaded ${path.basename(filepath)} (${rowCount} rows in ${elapsedSec} sec)`);
+    return callback(err, { rowCount, elapsedSec });
   });
 };
 
 const populateTasks = (dataDir, db, callback) => {
-  winston.info('  Populating Tasks Started');
+  winston.info('Populating Tasks Started');
 
   const tasks = [];
 
@@ -68,18 +61,18 @@ const populateTasks = (dataDir, db, callback) => {
       }
 
       if (table) {
-        tasks.push(async.apply(importTask, db, table, filepath));
-        winston.verbose('Task Created', { table, filepath });
+        tasks.push(async.apply(uploadData, db, table, filepath));
+        winston.verbose(' Task Created', { table, filepath });
       }
     });
 
-    winston.info(`  Populating Tasks Completed (${Object.keys(tasks).length} tasks from ${files.length} files)`);
+    winston.info(`Populating Tasks Completed (${Object.keys(tasks).length} tasks from ${files.length} files)`);
     return callback(null, tasks);
   });
 };
 
 function runTasks(tasks, parallelLimit, callback) {
-  winston.info('Upload Started', { parallelLimit, tasks: tasks.length });
+  winston.info('Uploading Started', { parallelLimit, tasks: tasks.length });
   const start = Date.now();
 
   async.parallelLimit(tasks, parallelLimit, (err, res) => {
@@ -89,9 +82,11 @@ function runTasks(tasks, parallelLimit, callback) {
       return callback(err);
     }
 
-    // const rows = _.sumBy(_.toArray(res), t => (t.rows ? t.rows : 0));
+    const rowCount = _.sumBy(_.toArray(res), t => (t.rowCount ? t.rowCount : 0));
+    const serialElapsedSec = _.sumBy(_.toArray(res), t => (t.elapsedSec ? t.elapsedSec : 0));
+    const serialTruncated = (Math.floor(serialElapsedSec) * 1000) / 1000;
 
-    winston.info(`  Upload Completed (${-42} rows in ${elapsedSec} sec)`);
+    winston.info(`Uploading Completed (${rowCount} rows in ${elapsedSec} sec, serial ${serialTruncated} sec)`);
     return callback(err, res);
   });
 }
@@ -104,7 +99,7 @@ function uncompress(sourceFile, targetDir, callback) {
   decompress(sourceFile, targetDir)
     .then((files) => {
       const elapsedSec = (Date.now() - start) / 1000;
-      winston.info(`  Decompress Completed (${elapsedSec} sec)`);
+      winston.info(`Decompress Completed (${elapsedSec} sec)`);
       return callback(null, files);
     })
     .catch((err) => {
@@ -120,14 +115,45 @@ function runScriptFile(db, taskName, relativePath, callback) {
 
   db.runScriptFile(scriptPath, (err, res) => {
     if (err) {
-      console.log('ERROR', err);
       winston.error(`Script ${taskName} Failed`, { err });
       return callback(err);
     }
 
     const elapsedSec = (Date.now() - start) / 1000;
-    winston.info(`${taskName} Completed (${elapsedSec} sec)`);
+    winston.info(`Script ${taskName} Completed (${elapsedSec} sec)`);
     return callback(err, res);
+  });
+}
+
+function deleteFolder(filepath, callback) {
+  winston.info('Delete Folder Started', { filepath });
+  const start = Date.now();
+
+  rimraf(filepath, {}, (err) => {
+    if (err) {
+      winston.error(`Delete folder (${filepath}) Failed`, { err });
+      return callback(err);
+    }
+
+    const elapsedSec = (Date.now() - start) / 1000;
+    winston.info(`Delete Folder Completed  (${elapsedSec} sec)`);
+    return callback(null);
+  });
+}
+
+function renameFile(fromPath, toPath, callback) {
+  winston.info('Rename File Started', { fromPath, toPath });
+  const start = Date.now();
+
+  fs.rename(fromPath, toPath, (err) => {
+    if (err) {
+      winston.error(`Rename File (${fromPath}) Failed`, { err });
+      return callback(err);
+    }
+
+    const elapsedSec = (Date.now() - start) / 1000;
+    winston.info(`Rename File Completed  (${elapsedSec} sec)`);
+    return callback(null);
   });
 }
 
@@ -138,16 +164,7 @@ function processFile(db, filepath, workingDir, parallelImports, processedExt, ca
   return async.auto({
     // Clear working directory.
     clearWorking: (cb) => {
-      const pattern = `${workingDir}/*`;
-      winston.info('Start clear working', { pattern });
-      rimraf(pattern, { }, (err) => {
-        if (err) {
-          winston.error('Unable to clear working', { err });
-          return cb(err);
-        }
-        winston.info('Cleared Working');
-        return cb(null);
-      });
+      deleteFolder(`${workingDir}/*`, cb);
     },
     // Initialize the etl tables to import data into.
     etlSchema: ['clearWorking', (res, cb) => {
@@ -218,7 +235,10 @@ function processFile(db, filepath, workingDir, parallelImports, processedExt, ca
     dropEtl: ['syncEntryState', (res, cb) => {
       runScriptFile(db, 'Drop ETL', '../sql/dropEtl.sql', cb);
     }],
-    vacuum: ['dropEtl', (res, cb) => {
+    logImport: ['dropEtl', (res, cb) => {
+      runScriptFile(db, 'Log Import', '../sql/logImport.sql', cb);
+    }],
+    vacuum: ['logImport', (res, cb) => {
       runScriptFile(db, 'Vacuum', '../sql/vacuum.sql', cb);
     }],
     // Clear the working directory with the uncompressed files.
@@ -228,41 +248,16 @@ function processFile(db, filepath, workingDir, parallelImports, processedExt, ca
     // Rename the imported file to indicate that it was processed successfully.
     renameFile: ['removeTemp', (res, cb) => {
       const processedPath = path.join(path.dirname(filepath), `${path.basename(filepath)}.${processedExt}`);
-      winston.info('Renaming file', { filepath, processedPath });
-      fs.rename(filepath, processedPath, cb);
+      renameFile(filepath, processedPath, cb);
     }],
   }, (err) => {
     if (err) {
-      console.log('Error', err);
+      winston.error('Import Error', { err });
       return callback(err);
     }
     const elapsedSec = (Date.now() - start) / 1000;
     winston.info(`Import Complete (${elapsedSec} sec)`);
     return callback(err);
-  });
-}
-
-function waitForConnection(db, callback) {
-  winston.info('Wait for Connection Started');
-  const start = Date.now();
-
-  const testConnection = cb => db.query({ q: 'select 1' }, cb);
-
-  async.retry({
-    times: 60,
-    internal: 1000,
-    errorFilter(err) {
-      winston.info(`  ${err}`);
-      return true;
-    },
-  }, testConnection, (err) => {
-    if (err) {
-      return callback(err);
-    }
-
-    const elapsedSec = (Date.now() - start) / 1000;
-    winston.info(`Wait for Connection Completed (${elapsedSec} sec)`);
-    return callback(null);
   });
 }
 
@@ -272,9 +267,7 @@ function startWatching(watchDir, ignoreExt, queue) {
   // Full list of options. See below for descriptions. (do not use this example)
   const watcher = chokidar.watch(watchDir, {
     persistent: true,
-    ignored: (filepath) => {
-      return path.extname(filepath) === `.${ignoreExt}`;
-    },
+    ignored: filepath => path.extname(filepath) === `.${ignoreExt}`,
     ignoreInitial: false,
     alwaysStat: true,
     awaitWriteFinish: {
@@ -294,7 +287,6 @@ function startWatching(watchDir, ignoreExt, queue) {
  *
  */
 function run(options) {
-  const start = Date.now();
   logger.info(_.repeat('=', 160));
   logger.info('Run Started');
 
@@ -309,7 +301,7 @@ function run(options) {
 
   const db = dbPostgres;
   db.init(target);
-  console.log('db', db);
+
   // Mask the password before logging.
   const logOptions = Object.assign({}, options, {
     target: Object.assign({}, options.target, { password: 'XXX' }),
@@ -322,7 +314,7 @@ function run(options) {
   // Create a queue object with concurrency of 1. When files are added to the queue they will
   // be processed one at a time.
   const queue = async.queue((filepath, cb) => {
-    logger.verbose('File Queued', filepath);
+    logger.verbose('File Queued', { filepath });
     processFile(db, filepath, workingDir, parallelImports, processedExt, cb);
   }, 1);
 
