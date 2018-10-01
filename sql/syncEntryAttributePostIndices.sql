@@ -22,8 +22,3 @@ CREATE INDEX idx_entry_attribute_entry_id
 ON universal.entry_attribute
 USING btree
 (entry_id);
-
-CREATE INDEX idx_entry_attribute_text_value
-ON universal.entry_attribute
-USING btree
-(text_value COLLATE pg_catalog."default");
