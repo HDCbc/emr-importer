@@ -4,7 +4,7 @@ const async = require('async');
 const chokidar = require('chokidar');
 const decompress = require('decompress');
 const fs = require('fs');
-const logger = require('winston');
+// const logger = require('logger');
 const path = require('path');
 const rimraf = require('rimraf');
 const winston = require('winston');
@@ -12,23 +12,25 @@ const winston = require('winston');
 // Import local modules
 const dbPostgres = require('./dbPostgres');
 
+let logger;
+
 const uploadData = (db, table, filepath, callback) => {
   const start = Date.now();
 
   db.importFile(table, filepath, (err, rowCount) => {
     const elapsedSec = (Date.now() - start) / 1000;
     if (err) {
-      winston.error(`Task Error (${table} ${filepath})`, err);
+      logger.error(`Task Error (${table} ${filepath})`, err);
       return callback(err);
     }
 
-    winston.verbose(` CSV Uploaded ${path.basename(filepath)} (${rowCount} rows in ${elapsedSec} sec)`);
+    logger.verbose(` CSV Uploaded ${path.basename(filepath)} (${rowCount} rows in ${elapsedSec} sec)`);
     return callback(err, { rowCount, elapsedSec });
   });
 };
 
 const populateTasks = (dataDir, db, callback) => {
-  winston.info('Populating Tasks Started');
+  logger.info('Populating Tasks Started');
 
   const tasks = [];
 
@@ -57,22 +59,22 @@ const populateTasks = (dataDir, db, callback) => {
       } else if (filename.startsWith('Entry')) { // Must be after entry-attribute and state
         table = 'etl.entry';
       } else {
-        winston.warn('Skipping File', { filename });
+        logger.warn('Skipping File', { filename });
       }
 
       if (table) {
         tasks.push(async.apply(uploadData, db, table, filepath));
-        winston.verbose(' Task Created', { table, filepath });
+        logger.verbose(' Task Created', { table, filepath });
       }
     });
 
-    winston.info(`Populating Tasks Completed (${Object.keys(tasks).length} tasks from ${files.length} files)`);
+    logger.info(`Populating Tasks Completed (${Object.keys(tasks).length} tasks from ${files.length} files)`);
     return callback(null, tasks);
   });
 };
 
 function runTasks(tasks, parallelLimit, callback) {
-  winston.info('Uploading Started', { parallelLimit, tasks: tasks.length });
+  logger.info('Uploading Started', { parallelLimit, tasks: tasks.length });
   const start = Date.now();
 
   async.parallelLimit(tasks, parallelLimit, (err, res) => {
@@ -86,79 +88,79 @@ function runTasks(tasks, parallelLimit, callback) {
     const serialElapsedSec = _.sumBy(_.toArray(res), t => (t.elapsedSec ? t.elapsedSec : 0));
     const serialTruncated = (Math.floor(serialElapsedSec) * 1000) / 1000;
 
-    winston.info(`Uploading Completed (${rowCount} rows in ${elapsedSec} sec, serial ${serialTruncated} sec)`);
+    logger.info(`Uploading Completed (${rowCount} rows in ${elapsedSec} sec, serial ${serialTruncated} sec)`);
     return callback(err, res);
   });
 }
 
 function uncompress(sourceFile, targetDir, callback) {
-  winston.info('Decompress Started', { sourceFile, targetDir });
+  logger.info('Decompress Started', { sourceFile, targetDir });
 
   const start = Date.now();
 
   decompress(sourceFile, targetDir)
     .then((files) => {
       const elapsedSec = (Date.now() - start) / 1000;
-      winston.info(`Decompress Completed (${elapsedSec} sec)`);
+      logger.info(`Decompress Completed (${elapsedSec} sec)`);
       return callback(null, files);
     })
     .catch((err) => {
-      winston.error('Decompress Failed', { err });
+      logger.error('Decompress Failed', { err });
       return callback(err);
     });
 }
 
 function runScriptFile(db, taskName, relativePath, callback) {
   const scriptPath = path.join(__dirname, relativePath);
-  winston.info(`Script ${taskName} Started`, { taskName, scriptPath });
+  logger.info(`Script ${taskName} Started`, { taskName, scriptPath });
   const start = Date.now();
 
   db.runScriptFile(scriptPath, (err, res) => {
     if (err) {
-      winston.error(`Script ${taskName} Failed`, { err });
+      logger.error(`Script ${taskName} Failed`, { err });
       return callback(err);
     }
 
     const elapsedSec = (Date.now() - start) / 1000;
-    winston.info(`Script ${taskName} Completed (${elapsedSec} sec)`);
+    logger.info(`Script ${taskName} Completed (${elapsedSec} sec)`);
     return callback(err, res);
   });
 }
 
 function deleteFolder(filepath, callback) {
-  winston.info('Delete Folder Started', { filepath });
+  logger.info('Delete Folder Started', { filepath });
   const start = Date.now();
 
   rimraf(filepath, {}, (err) => {
     if (err) {
-      winston.error(`Delete folder (${filepath}) Failed`, { err });
+      logger.error(`Delete folder (${filepath}) Failed`, { err });
       return callback(err);
     }
 
     const elapsedSec = (Date.now() - start) / 1000;
-    winston.info(`Delete Folder Completed  (${elapsedSec} sec)`);
+    logger.info(`Delete Folder Completed  (${elapsedSec} sec)`);
     return callback(null);
   });
 }
 
 function renameFile(fromPath, toPath, callback) {
-  winston.info('Rename File Started', { fromPath, toPath });
+  logger.info('Rename File Started', { fromPath, toPath });
   const start = Date.now();
 
   fs.rename(fromPath, toPath, (err) => {
     if (err) {
-      winston.error(`Rename File (${fromPath}) Failed`, { err });
+      logger.error(`Rename File (${fromPath}) Failed`, { err });
       return callback(err);
     }
 
     const elapsedSec = (Date.now() - start) / 1000;
-    winston.info(`Rename File Completed  (${elapsedSec} sec)`);
+    logger.info(`Rename File Completed  (${elapsedSec} sec)`);
     return callback(null);
   });
 }
 
 function processFile(db, filepath, workingDir, parallelImports, processedExt, callback) {
-  winston.info('Import Started', { filepath, workingDir });
+  logger.info('Import Started', { filepath, workingDir });
   const start = Date.now();
 
   return async.auto({
@@ -252,11 +254,11 @@ function processFile(db, filepath, workingDir, parallelImports, processedExt, ca
     }],
   }, (err) => {
     if (err) {
-      winston.error('Import Error', { err });
+      logger.error('Import Error', { err });
       return callback(err);
     }
     const elapsedSec = (Date.now() - start) / 1000;
-    winston.info(`Import Complete (${elapsedSec} sec)`);
+    logger.info(`Import Complete (${elapsedSec} sec)`);
     return callback(err);
   });
 }
@@ -287,6 +289,7 @@ function startWatching(watchDir, ignoreExt, queue) {
  *
  */
 function run(options) {
+  logger = winston.loggers.get('app');
   logger.info(_.repeat('=', 160));
   logger.info('Run Started');
 

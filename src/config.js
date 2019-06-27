@@ -1,5 +1,5 @@
 const dotenv = require('dotenv');
-const Joi = require('joi');
+const Joi = require('@hapi/joi');
 const nconf = require('nconf');
 
 /**
@@ -37,6 +37,7 @@ function get() {
       maxFiles: 10,
       zippedArchive: true,
       tailable: true,
+      timezone: 'America/Vancouver',
     },
     sourceDir: '/hdc/crypt/uploads',
     parallelImports: 10,
@@ -93,6 +94,7 @@ function validate(config, callback) {
       maxFiles: Joi.number().integer().min(1),
       zippedArchive: Joi.boolean(),
       tailable: Joi.boolean(),
+      timezone: Joi.string(),
     }),
   });
 
