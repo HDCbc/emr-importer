@@ -26,19 +26,18 @@
   "homepage": "https://github.com/HDCbc/emr-importer#readme",
   "dependencies": {
     "async": "^2.6.1",
-    "chalk": "^2.4.1",
     "chokidar": "^2.0.3",
     "decompress": "^4.2.0",
     "dotenv": "^5.0.1",
     "joi": "^13.3.0",
     "lodash": "^4.17.10",
-    "moment": "^2.22.1",
+    "moment-timezone": "^0.5.25",
     "nconf": "^0.10.0",
     "pg": "^7.4.3",
     "pg-copy-streams": "^1.2.0",
     "printf": "^0.3.0",
     "rimraf": "^2.6.2",
-    "winston": "^2.4.2"
+    "winston": "^3.2.1"
   },
   "devDependencies": {
     "depcheck": "^0.6.9",
