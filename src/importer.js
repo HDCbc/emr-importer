@@ -17,6 +17,13 @@ let logger;
 const uploadData = (db, table, filepath, callback) => {
   const start = Date.now();
 
+  let filestr = fs.readFileSync(filepath, { encoding: 'utf8' })
+  filestr = filestr
+    .replace('"0000-00-00 00:00:00"','\\N')
+    .replace('"0000-00-00"','\\N')
+    .replace('"0000-00-00T00:00:00.000000Z"','\\N');
+  fs.writeFileSync(filepath, filestr);
+
   db.importFile(table, filepath, (err, rowCount) => {
     const elapsedSec = (Date.now() - start) / 1000;
     if (err) {
