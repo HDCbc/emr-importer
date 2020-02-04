@@ -14,26 +14,37 @@ const dbPostgres = require('./dbPostgres');
 
 let logger;
 
-const uploadData = (db, table, filepath, callback) => {
-  const start = Date.now();
-
-  let filestr = fs.readFileSync(filepath, { encoding: 'utf8' })
-  filestr = filestr
+const convertFileData = (filepath, callback) => {
+  fs.readFile(filepath, 'utf8', (err, filestr) => {
+    if (err) return callback(err);
+    filestr = filestr
     .replace('"0000-00-00 00:00:00"','\\N')
     .replace('"0000-00-00"','\\N')
     .replace('"0000-00-00T00:00:00.000000Z"','\\N');
-  fs.writeFileSync(filepath, filestr);
 
-  db.importFile(table, filepath, (err, rowCount) => {
-    const elapsedSec = (Date.now() - start) / 1000;
-    if (err) {
-      logger.error(`Task Error (${table} ${filepath})`, err);
-      return callback(err);
-    }
+    fs.writeFile(filepath, filestr, 'utf8', (err2, data) => {
+      if (err2) return callback(err2)
+      callback(null, data)
+    })
+  });  
+}
 
-    logger.verbose(` CSV Uploaded ${path.basename(filepath)} (${rowCount} rows in ${elapsedSec} sec)`);
-    return callback(err, { rowCount, elapsedSec });
-  });
+const uploadData = (db, table, filepath, callback) => {
+  const start = Date.now();
+
+  convertFileData(filepath, (err) => {
+    if (err) return callback(err)
+    db.importFile(table, filepath, (err, rowCount) => {
+      const elapsedSec = (Date.now() - start) / 1000;
+      if (err) {
+        logger.error(`Task Error (${table} ${filepath})`, err);
+        return callback(err);
+      }
+  
+      logger.verbose(` CSV Uploaded ${path.basename(filepath)} (${rowCount} rows in ${elapsedSec} sec)`);
+      return callback(err, { rowCount, elapsedSec });
+    });
+  })
 };
 
 const populateTasks = (dataDir, db, callback) => {
