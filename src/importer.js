@@ -14,19 +14,55 @@ const dbPostgres = require('./dbPostgres');
 
 let logger;
 
+const convertFileData = (filepath, callback) => {
+  const start = Date.now();
+  const filename = path.basename(filepath);
+  logger.debug('Removing Bad Dates Started', { filename });
+
+  fs.readFile(filepath, 'utf8', (readErr, filestr) => {
+    if (readErr) {
+      logger.error(`Removing Bad Dates Read Error (${filename})`, { readErr });
+      return callback(readErr);
+    }
+
+    const newString = filestr
+      .replace(/"0000-00-00 00:00:00"/g, '\\N')
+      .replace(/0000-00-00 00:00:00/g, '\\N')
+      .replace(/"0000-00-00T00:00:00.000000Z"/g, '\\N')
+      .replace(/0000-00-00T00:00:00.000000Z/g, '\\N')
+      .replace(/"0000-00-00"/g, '\\N')
+      .replace(/0000-00-00/g, '\\N');
+
+    return fs.writeFile(filepath, newString, 'utf8', (writeErr, data) => {
+      if (writeErr) {
+        logger.error(`Removing Bad Dates Write Error (${filename})`, { writeErr });
+        return callback(writeErr);
+      }
+
+      const elapsedSec = (Date.now() - start) / 1000;
+      logger.debug('Removing Bad Dates Success', { filename, elapsedSec });
+
+      return callback(null, data);
+    });
+  });
+};
+
 const uploadData = (db, table, filepath, callback) => {
   const start = Date.now();
 
-  db.importFile(table, filepath, (err, rowCount) => {
-    const elapsedSec = (Date.now() - start) / 1000;
-    if (err) {
-      logger.error(`Task Error (${table} ${filepath})`, err);
-      return callback(err);
-    }
+  convertFileData(filepath, (err) => {
+    if (err) return callback(err)
+    db.importFile(table, filepath, (err, rowCount) => {
+      const elapsedSec = (Date.now() - start) / 1000;
+      if (err) {
+        logger.error(`Task Error (${table} ${filepath})`, err);
+        return callback(err);
+      }
 
-    logger.verbose(` CSV Uploaded ${path.basename(filepath)} (${rowCount} rows in ${elapsedSec} sec)`);
-    return callback(err, { rowCount, elapsedSec });
-  });
+      logger.verbose(` CSV Uploaded ${path.basename(filepath)} (${rowCount} rows in ${elapsedSec} sec)`);
+      return callback(err, { rowCount, elapsedSec });
+    });
+  })
 };
 
 const populateTasks = (dataDir, db, callback) => {
