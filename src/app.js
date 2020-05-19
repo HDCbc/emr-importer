@@ -24,7 +24,7 @@ function run() {
   config.load((errConfig, configValues) => {
     if (errConfig) {
       // Cannot log to the logger file as the configuration is required to setup the logger.
-      console.error('Unable to load configuration', errConfig); //eslint-disable-line
+      console.error('Unable to load configuration', { errConfig }); //eslint-disable-line
       process.exit(1);
     }
 

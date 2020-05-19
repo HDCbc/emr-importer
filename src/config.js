@@ -102,9 +102,13 @@ function validate(config, callback) {
     presence: 'required', // All fields required by default
   };
   // Return result.
-  const result = Joi.validate(config, schema, validateOptions, callback);
+  const result = schema.validate(config, validateOptions);
 
-  return result;
+  if (result.error) {
+    return callback(result.error);
+  }
+
+  return callback(null, result.value);
 }
 
 /**

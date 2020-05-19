@@ -9,7 +9,7 @@
     "start": "node index.js",
     "build": "pkg . --out-path ./build/",
     "clean": "rm -rf ./build",
-    "check": "check-audit && npm run depcheck && npm outdated && npm run stylecheck"
+    "check": "npm audit && npm run depcheck && npm outdated && npm run stylecheck"
   },
   "repository": {
     "type": "git",
@@ -22,26 +22,26 @@
   },
   "homepage": "https://github.com/HDCbc/emr-importer#readme",
   "dependencies": {
-    "@hapi/joi": "^15.1.0",
-    "async": "^3.1.0",
-    "chokidar": "^3.0.1",
-    "decompress": "^4.2.0",
-    "dotenv": "^8.0.0",
-    "lodash": "^4.17.11",
-    "moment-timezone": "^0.5.25",
+    "@hapi/joi": "^17.1.1",
+    "async": "^3.2.0",
+    "chokidar": "^3.4.0",
+    "decompress": "^4.2.1",
+    "dotenv": "^8.2.0",
+    "lodash": "^4.17.15",
+    "moment-timezone": "^0.5.31",
     "nconf": "^0.10.0",
-    "pg": "^7.4.3",
-    "pg-copy-streams": "^2.2.0",
-    "printf": "^0.5.1",
-    "rimraf": "^2.6.3",
-    "winston": "^3.2.1"
+    "pg": "^8.2.2",
+    "pg-copy-streams": "^5.1.0",
+    "printf": "^0.5.3",
+    "rimraf": "^3.0.2",
+    "winston": "^3.3.3"
   },
   "devDependencies": {
-    "depcheck": "^0.8.1",
-    "eslint": "^5.3.0",
-    "eslint-config-airbnb-base": "^13.1.0",
-    "eslint-plugin-import": "^2.14.0",
-    "pkg": "^4.3.0-beta.5"
+    "depcheck": "^1.0.0",
+    "eslint": "^7.4.0",
+    "eslint-config-airbnb-base": "^14.2.0",
+    "eslint-plugin-import": "^2.22.0",
+    "pkg": "^4.4.9"
   },
   "pkg": {
     "assets": [

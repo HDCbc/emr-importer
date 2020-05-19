@@ -4,7 +4,6 @@ const async = require('async');
 const chokidar = require('chokidar');
 const decompress = require('decompress');
 const fs = require('fs');
-// const logger = require('logger');
 const path = require('path');
 const rimraf = require('rimraf');
 const winston = require('winston');
@@ -49,20 +48,27 @@ const convertFileData = (filepath, callback) => {
 
 const uploadData = (db, table, filepath, callback) => {
   const start = Date.now();
+  const filename = path.basename(filepath);
 
-  convertFileData(filepath, (err) => {
-    if (err) return callback(err)
-    db.importFile(table, filepath, (err, rowCount) => {
-      const elapsedSec = (Date.now() - start) / 1000;
-      if (err) {
-        logger.error(`Task Error (${table} ${filepath})`, err);
-        return callback(err);
+  logger.debug(' CSV Upload Started', { filename });
+
+  convertFileData(filepath, (convertErr) => {
+    if (convertErr) {
+      logger.error(` CSV Upload Convert Error (${table} ${filepath})`, { convertErr });
+      return callback(convertErr);
+    }
+
+    return db.importFile(table, filepath, (importErr, rowCount) => {
+      if (importErr) {
+        logger.error(`CSV Upload Import Error (${table} ${filepath})`, { importErr });
+        return callback(importErr);
       }
 
-      logger.verbose(` CSV Uploaded ${path.basename(filepath)} (${rowCount} rows in ${elapsedSec} sec)`);
-      return callback(err, { rowCount, elapsedSec });
+      const elapsedSec = (Date.now() - start) / 1000;
+      logger.verbose(` CSV Uploaded ${filename} (${rowCount} rows in ${elapsedSec} sec)`);
+      return callback(importErr, { rowCount, elapsedSec });
     });
-  })
+  });
 };
 
 const populateTasks = (dataDir, db, callback) => {
@@ -120,8 +126,8 @@ function runTasks(tasks, parallelLimit, callback) {
       return callback(err);
     }
 
-    const rowCount = _.sumBy(_.toArray(res), t => (t.rowCount ? t.rowCount : 0));
-    const serialElapsedSec = _.sumBy(_.toArray(res), t => (t.elapsedSec ? t.elapsedSec : 0));
+    const rowCount = _.sumBy(_.toArray(res), (t) => (t.rowCount ? t.rowCount : 0));
+    const serialElapsedSec = _.sumBy(_.toArray(res), (t) => (t.elapsedSec ? t.elapsedSec : 0));
     const serialTruncated = (Math.floor(serialElapsedSec) * 1000) / 1000;
 
     logger.info(`Uploading Completed (${rowCount} rows in ${elapsedSec} sec, serial ${serialTruncated} sec)`);
@@ -305,7 +311,7 @@ function startWatching(watchDir, ignoreExt, queue) {
   // Full list of options. See below for descriptions. (do not use this example)
   const watcher = chokidar.watch(watchDir, {
     persistent: true,
-    ignored: filepath => path.extname(filepath) === `.${ignoreExt}`,
+    ignored: (filepath) => path.extname(filepath) === `.${ignoreExt}`,
     ignoreInitial: false,
     alwaysStat: true,
     awaitWriteFinish: {
@@ -342,9 +348,7 @@ function run(options) {
   db.init(target);
 
   // Mask the password before logging.
-  const logOptions = Object.assign({}, options, {
-    target: Object.assign({}, options.target, { password: 'XXX' }),
-  });
+  const logOptions = { ...options, target: { ...options.target, password: 'XXX' } };
   logger.verbose('Configuration');
   _.forEach(_.keys(logOptions), (key) => {
     logger.verbose(`-${key}`, { value: logOptions[key] });
