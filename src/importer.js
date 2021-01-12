@@ -5,6 +5,7 @@ const chokidar = require('chokidar');
 const decompress = require('decompress');
 const fs = require('fs');
 const path = require('path');
+const replaceStream = require('replacestream');
 const rimraf = require('rimraf');
 const winston = require('winston');
 
@@ -16,32 +17,43 @@ let logger;
 const convertFileData = (filepath, callback) => {
   const start = Date.now();
   const filename = path.basename(filepath);
-  logger.debug('Removing Bad Dates Started', { filename });
+  logger.verbose('Removing Bad Dates Started', { filename });
 
-  fs.readFile(filepath, 'utf8', (readErr, filestr) => {
-    if (readErr) {
-      logger.error(`Removing Bad Dates Read Error (${filename})`, { readErr });
-      return callback(readErr);
-    }
+  const findRegex = /"?0000-00-00 00:00:00"?|"?0000-00-00T00:00:00.000000Z"?|"?0000-00-00"?/g;
 
-    const newString = filestr
-      .replace(/"0000-00-00 00:00:00"/g, '\\N')
-      .replace(/0000-00-00 00:00:00/g, '\\N')
-      .replace(/"0000-00-00T00:00:00.000000Z"/g, '\\N')
-      .replace(/0000-00-00T00:00:00.000000Z/g, '\\N')
-      .replace(/"0000-00-00"/g, '\\N')
-      .replace(/0000-00-00/g, '\\N');
+  const readStream = fs.createReadStream(filepath, { encoding: 'utf8', autoClose: true });
+  const replacerStream = replaceStream(findRegex, '\\N');
+  const writeStream = fs.createWriteStream(`${filepath}.tmp`, { encoding: 'utf8', autoClose: true });
 
-    return fs.writeFile(filepath, newString, 'utf8', (writeErr, data) => {
-      if (writeErr) {
-        logger.error(`Removing Bad Dates Write Error (${filename})`, { writeErr });
-        return callback(writeErr);
+  readStream.on('error', (readErr) => {
+    logger.error(`Removing Bad Date Read Error (${filename})`, { readErr });
+    return callback(readErr);
+  });
+
+  replacerStream.on('error', (replaceErr) => {
+    logger.error(`Removing Bad Date Replace Error (${filename})`, { replaceErr });
+    return callback(replaceErr);
+  });
+
+  writeStream.on('error', (writeErr) => {
+    logger.error(`Removing Bad Date Write Error (${filename})`, { writeErr });
+    return callback(writeErr);
+  });
+
+  readStream
+    .pipe(replacerStream)
+    .pipe(writeStream);
+
+  writeStream.on('finish', async () => {
+    fs.rename(`${filepath}.tmp`, filepath, (renameErr) => {
+      if (renameErr) {
+        logger.error(`Removing Bad Date Rename Error (${filename})`, { renameErr });
+        return callback(renameErr);
       }
 
       const elapsedSec = (Date.now() - start) / 1000;
-      logger.debug('Removing Bad Dates Success', { filename, elapsedSec });
-
-      return callback(null, data);
+      logger.verbose('Removing Bad Dates Success', { filename, elapsedSec });
+      return callback(null);
     });
   });
 };
