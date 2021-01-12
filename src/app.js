@@ -1,6 +1,15 @@
+const winston = require('winston');
+
 const importer = require('./importer');
 const config = require('./config');
 const configureLogger = require('./configureLogger');
+
+function exit(code) {
+  const appLogger = winston.loggers.get('app');
+  appLogger.log('info', `Exit Code ${code}`, code);
+  appLogger.on('finish', () => process.exit());
+  appLogger.end();
+}
 
 /**
  * Run the application by loading the configuration and then running the importer.
@@ -15,7 +24,7 @@ function run() {
   config.load((errConfig, configValues) => {
     if (errConfig) {
       // Cannot log to the logger file as the configuration is required to setup the logger.
-      console.error('Unable to load configuration', errConfig); //eslint-disable-line
+      console.error('Unable to load configuration', { errConfig }); //eslint-disable-line
       process.exit(1);
     }
 
@@ -25,10 +34,10 @@ function run() {
     importer.run(configValues, (errApp) => {
       // If an error occured in the application then exit with an error value.
       if (errApp) {
-        process.exit(2);
+        exit(2);
       }
       // Otherwise exit successfully.
-      process.exit(0);
+      exit(0);
     });
   });
 }

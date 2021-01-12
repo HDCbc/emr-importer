@@ -11,6 +11,7 @@ module.exports = (() => {
   // The current pool of connections.
   // This will not be instantiated until the init function is called.
   let pool;
+  let logger;
 
   /**
    * Initializes the connection pool for the target database.
@@ -19,11 +20,12 @@ module.exports = (() => {
    * @param config - A configuration object to be passed to pg.Pool.
    */
   const init = (config) => {
+    logger = winston.loggers.get('app');
     pool = new pg.Pool(config);
   };
 
   const query = ({ q, p = [] }, callback) => {
-    winston.debug('Postgres Query', q);
+    logger.debug('Postgres Query', { q });
     pool.query(q, p, (err, res) => {
       if (err) {
         return callback(err);
@@ -33,7 +35,7 @@ module.exports = (() => {
   };
 
   const query2 = (q, callback) => {
-    winston.debug('Postgres Query', q);
+    logger.debug('Postgres Query', { q });
     pool.query(q, (err, res) => {
       if (err) {
         return callback(err);
@@ -43,7 +45,7 @@ module.exports = (() => {
   };
 
   const runScriptFile = (path, callback) => {
-    winston.debug('target.runScriptFile', path);
+    logger.debug('target.runScriptFile', { path });
     async.waterfall([
       async.constant(path), // , 'utf8'),
       fs.readFile,
@@ -54,19 +56,23 @@ module.exports = (() => {
   };
 
   const importFile = (table, filepath, callback) => {
-    winston.debug('db_postgres.importFile', { table, filepath });
+    logger.debug('db_postgres.importFile', { table, filepath });
 
     const statement = `COPY ${table} FROM STDIN DELIMITER ',' CSV NULL AS '\\N' ENCODING 'LATIN1' ESCAPE '\\';`;
 
-    winston.debug('Copy Statement', statement);
+    logger.debug('Copy Statement', { statement });
 
     pool.connect((err, client, done) => {
       if (err) {
+        logger.error('Pool connection error', { err });
         return callback(err);
       }
       const cf = copyFrom(statement);
 
       function allDone(streamErr) {
+        if (streamErr) {
+          logger.error('Copy From Error', { streamErr });
+        }
         // Close the connection to the database
         done();
         callback(streamErr, cf.rowCount);
@@ -76,7 +82,8 @@ module.exports = (() => {
       const fileStream = fs.createReadStream(filepath);
       fileStream.on('error', allDone);
       stream.on('error', allDone);
-      stream.on('end', allDone);
+      stream.on('finish', allDone);
+
       return fileStream.pipe(stream);
     });
   };
