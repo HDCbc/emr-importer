@@ -19,10 +19,19 @@ const convertFileData = (filepath, callback) => {
   const filename = path.basename(filepath);
   logger.verbose('Removing Bad Dates Started', { filename });
 
-  const findRegex = /"?0000-00-00 00:00:00"?|"?0000-00-00T00:00:00.000000Z"?|"?0000-00-00"?/g;
-
+  // Note that all of the regex streams must be done in separate streams, otherwise if a chunk of
+  // data is being compared to the regex, and that chunk matches one of the lazier matches it will,
+  // even though it might have matched a longer regex if it had read in the next chunk. We want all
+  // of the separate regex to be greedy. The replacestream module deals with regex across chunks,
+  // but does not appear to work as needed with multiple regex in one stream where the order matters
   const readStream = fs.createReadStream(filepath, { encoding: 'utf8', autoClose: true });
-  const replacerStream = replaceStream(findRegex, '\\N');
+  const replacerStream1 = replaceStream(/"0000-00-00 00:00:00"/g, '\\N');
+  const replacerStream2 = replaceStream(/0000-00-00 00:00:00/g, '\\N');
+  const replacerStream3 = replaceStream(/"0000-00-00T00:00:00.000000Z"/g, '\\N');
+  const replacerStream4 = replaceStream(/0000-00-00T00:00:00.000000Z/g, '\\N');
+  const replacerStream5 = replaceStream(/"0000-00-00"/g, '\\N');
+  const replacerStream6 = replaceStream(/0000-00-00/g, '\\N');
+
   const writeStream = fs.createWriteStream(`${filepath}.tmp`, { encoding: 'utf8', autoClose: true });
 
   readStream.on('error', (readErr) => {
@@ -30,10 +39,17 @@ const convertFileData = (filepath, callback) => {
     return callback(readErr);
   });
 
-  replacerStream.on('error', (replaceErr) => {
+  const replaceError = (replaceErr) => {
     logger.error(`Removing Bad Date Replace Error (${filename})`, { replaceErr });
     return callback(replaceErr);
-  });
+  };
+
+  replacerStream1.on('error', replaceError);
+  replacerStream2.on('error', replaceError);
+  replacerStream3.on('error', replaceError);
+  replacerStream4.on('error', replaceError);
+  replacerStream5.on('error', replaceError);
+  replacerStream6.on('error', replaceError);
 
   writeStream.on('error', (writeErr) => {
     logger.error(`Removing Bad Date Write Error (${filename})`, { writeErr });
@@ -41,7 +57,12 @@ const convertFileData = (filepath, callback) => {
   });
 
   readStream
-    .pipe(replacerStream)
+    .pipe(replacerStream1)
+    .pipe(replacerStream2)
+    .pipe(replacerStream3)
+    .pipe(replacerStream4)
+    .pipe(replacerStream5)
+    .pipe(replacerStream6)
     .pipe(writeStream);
 
   writeStream.on('finish', async () => {
