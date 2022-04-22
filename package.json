@@ -29,7 +29,7 @@
     "dotenv": "^8.2.0",
     "lodash": "^4.17.20",
     "moment-timezone": "^0.5.32",
-    "nconf": "^0.11.1",
+    "nconf": "^0.11.4",
     "pg": "^8.5.1",
     "pg-copy-streams": "^5.1.1",
     "printf": "^0.6.0",
