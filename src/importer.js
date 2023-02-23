@@ -1,8 +1,8 @@
 // Import npm modules
 const _ = require('lodash');
 const async = require('async');
+const { spawnSync } = require('child_process');
 const chokidar = require('chokidar');
-const decompress = require('decompress');
 const fs = require('fs');
 const path = require('path');
 const replaceStream = require('replacestream');
@@ -173,16 +173,38 @@ function uncompress(sourceFile, targetDir, callback) {
 
   const start = Date.now();
 
-  decompress(sourceFile, targetDir)
-    .then((files) => {
-      const elapsedSec = (Date.now() - start) / 1000;
-      logger.info(`Decompress Completed (${elapsedSec} sec)`);
-      return callback(null, files);
-    })
-    .catch((err) => {
-      logger.error('Decompress Failed', { err });
-      return callback(err);
-    });
+  if (!fs.existsSync(sourceFile)) {
+    const err = `Cannot decompress file '${sourceFile}' that does not exist`;
+    logger.error(err);
+    return callback(err);
+  }
+
+  logger.debug('Decompress source exists', { sourceFile });
+
+  if (!fs.existsSync(targetDir)) {
+    const err = `Cannot decompress to directory '${targetDir}' that does not exist`;
+    logger.error(err);
+    return callback(err);
+  }
+
+  logger.debug('Decompress target exists', { targetDir });
+
+  const { stdout, stderr, status } = spawnSync('unzip', ['-d', targetDir, sourceFile]);
+
+  logger.debug('Process Stdout', stdout);
+
+  if(stderr && stderr.toString().trim() !== '') {
+    logger.error('Process Stderr', stderr);
+  }
+
+  if (status === 0) {
+    const elapsedSec = (Date.now() - start) / 1000;
+    logger.info(`Decompress Completed (${elapsedSec} sec)`);
+    return callback(null);
+  }
+
+  logger.error('Decompress Failed', { status });
+  return callback(`Decompress return code ${status}`);
 }
 
 function runScriptFile(db, taskName, relativePath, callback) {
